@@ -38,7 +38,18 @@ def _generate_and_visualize_cfg(input_py_path, output_image_path, base_graph_nam
     except Exception as build_err:
         logger.error(f"Failed during CFGBuilder().build_from_file: {build_err}", exc_info=True)
         raise RuntimeError(f"Failed to build CFG object: {build_err}") from build_err
-
+        # ADD DEBUG LOGGING BEFORE the check
+    if cfg:
+        logger.info(f"DEBUG: Type of cfg object: {type(cfg)}")
+        logger.info(f"DEBUG: Attributes of cfg object: {dir(cfg)}")
+        graph_attr = getattr(cfg, 'graph', 'ATTRIBUTE_MISSING')
+        logger.info(f"DEBUG: Value of cfg.graph attribute: {graph_attr}")
+        logger.info(f"DEBUG: Does cfg have 'graph' attribute? {hasattr(cfg, 'graph')}")
+        is_graph_trueish = bool(graph_attr) if graph_attr != 'ATTRIBUTE_MISSING' else 'N/A'
+        logger.info(f"DEBUG: Is cfg.graph True-ish? {is_graph_trueish}")
+    else:
+        logger.warning("DEBUG: CFGBuilder returned None or False-ish object.")
+        # END DEBUG LOGGING
     # Step 2: Check if the core graph attribute exists
     if not cfg or not hasattr(cfg, 'graph') or not cfg.graph:
         logger.error("Failed to create a valid CFG graph object from the input (cfg or cfg.graph is invalid).")
