@@ -39,11 +39,11 @@ def generate_cfg_web(input_file_path, output_filename, format='png'):
 
     # Generate and visualize the CFG
     try:
-        cfg = CFGBuilder().build_from_file(output_filename.split('.')[0], input_file_path) # Use filename base as graph name
-        if not cfg or not cfg.graph: # Check if the graph object itself is valid
-             # This can happen if the input .py file is empty or contains only comments/imports
-             logging.warning(f"Generated CFG for '{os.path.basename(input_file_path)}' is empty or invalid.")
-             raise RuntimeError("Generated CFG is empty or invalid. Input file might lack executable code.")
+        cfg = CFGBuilder().build_from_file(output_filename.split('.')[0], input_file_path)
+        if not cfg or not cfg._blocks:  # Check if the CFG has blocks (i.e., meaningful code)
+            logging.warning(f"Generated CFG for '{os.path.basename(input_file_path)}' is empty or invalid.")
+            raise RuntimeError("Generated CFG is empty or invalid. Input file might lack executable code.")
+
 
         logging.info(f"CFG object created. Attempting to build visual: {output_path} (format: {format})")
         # The build_visual method requires the 'dot' command from Graphviz
