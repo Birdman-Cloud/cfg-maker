@@ -3,12 +3,11 @@ import argparse
 import os
 import tempfile
 import logging
-import subprocess # Needed for running dot via pipe
+import subprocess # Still potentially needed if graphviz library uses it indirectly
 import shutil    # Needed for cleanup
 
 # --- Configuration ---
-# Configure basic logging (consider adding timestamps, etc., if needed)
-# Using a more detailed format for better debugging
+# Configure basic logging (using a more detailed format for better debugging)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__) # Use a specific logger
 
@@ -16,86 +15,68 @@ logger = logging.getLogger(__name__) # Use a specific logger
 
 def _generate_and_visualize_cfg(input_py_path, output_image_path, base_graph_name, image_format='png'):
     """
-    Internal core function to build CFG object and render it using dot.
+    Internal core function to build CFG object and render it using dot via build_visual.
 
     Raises exceptions on failure (e.g., SyntaxError, FileNotFoundError, RuntimeError).
     """
     # Step 1: Build the CFG object using py2cfg
     logger.info(f"Building CFG object for '{os.path.basename(input_py_path)}'")
-    # Ensure py2cfg is imported correctly within the scope where CFGBuilder is needed
+    # Ensure py2cfg is imported correctly
+    # If using globally, ensure it's available when file is imported
     from py2cfg import CFGBuilder
     try:
         cfg = CFGBuilder().build_from_file(base_graph_name, input_py_path)
         logger.info("CFG object created.")
     except SyntaxError as syn_err:
         logger.error(f"Syntax error in input file '{input_py_path}': {syn_err}")
-        # Include line number if available
         err_details = f"{syn_err}"
         if hasattr(syn_err, 'lineno') and syn_err.lineno:
              err_details += f" (line {syn_err.lineno})"
         raise RuntimeError(f"Input file contains syntax errors: {err_details}") from syn_err
-    # Catch potential errors from py2cfg apart from SyntaxError
     except Exception as build_err:
         logger.error(f"Failed during CFGBuilder().build_from_file: {build_err}", exc_info=True)
         raise RuntimeError(f"Failed to build CFG object: {build_err}") from build_err
-        # ADD DEBUG LOGGING BEFORE the check
-    if cfg:
-        logger.info(f"DEBUG: Type of cfg object: {type(cfg)}")
-        logger.info(f"DEBUG: Attributes of cfg object: {dir(cfg)}")
-        graph_attr = getattr(cfg, 'graph', 'ATTRIBUTE_MISSING')
-        logger.info(f"DEBUG: Value of cfg.graph attribute: {graph_attr}")
-        logger.info(f"DEBUG: Does cfg have 'graph' attribute? {hasattr(cfg, 'graph')}")
-        is_graph_trueish = bool(graph_attr) if graph_attr != 'ATTRIBUTE_MISSING' else 'N/A'
-        logger.info(f"DEBUG: Is cfg.graph True-ish? {is_graph_trueish}")
-    else:
-        logger.warning("DEBUG: CFGBuilder returned None or False-ish object.")
-        # END DEBUG LOGGING
-    # Step 2: Check if the core graph attribute exists
-    if not cfg or not hasattr(cfg, 'graph') or not cfg.graph:
-        logger.error("Failed to create a valid CFG graph object from the input (cfg or cfg.graph is invalid).")
-        raise RuntimeError("Failed to create a valid CFG graph object (empty or unparsable input?).")
 
-    # Step 3: Attempt visualization using graphviz.pipe to capture output/errors
-    logger.info(f"Attempting to visualize graph via pipe (format: {image_format}) to '{output_image_path}'")
-    img_output_bytes = None
+    # Step 2: Basic check if cfg object was created
+    if not cfg:
+        logger.error("CFGBuilder().build_from_file returned None or invalid object.")
+        raise RuntimeError("Failed to create a valid CFG object.")
+
+    # Step 3: Attempt visualization directly using build_visual
+    logger.info(f"Attempting visualization via build_visual() to '{output_image_path}'")
     try:
-        # The cfg.graph object should be a graphviz.Digraph
-        # Use pipe() to execute 'dot' and get the raw output bytes
-        img_output_bytes = cfg.graph.pipe(format=image_format) # Returns bytes
-        logger.info(f"Graphviz pipe() returned {len(img_output_bytes)} bytes.")
+        # Let build_visual handle internal graph creation and dot execution
+        cfg.build_visual(output_image_path, format=image_format, show=False)
+        logger.info("build_visual() completed.")
 
-    except (subprocess.CalledProcessError, FileNotFoundError) as pipe_err:
-        logger.error(f"'dot' command execution failed during pipe(): {pipe_err}", exc_info=True)
-        # Attempt to decode stderr for better logging
-        stderr_output = getattr(pipe_err, 'stderr', None)
-        if isinstance(stderr_output, bytes):
-             stderr_output = stderr_output.decode('utf-8', errors='replace')
-        else:
-             stderr_output = "N/A"
-        raise RuntimeError(f"Graphviz 'dot' command failed. Stderr: {stderr_output}") from pipe_err
-    except Exception as pipe_exc:
-        logger.error(f"Unexpected error during graphviz pipe(): {pipe_exc}", exc_info=True)
-        raise RuntimeError(f"Unexpected error during graphviz pipe(): {pipe_exc}") from pipe_exc
+    except FileNotFoundError as fnf_err:
+        # Catch if build_visual itself can't find 'dot'
+        logger.error(f"'dot' command not found by build_visual: {fnf_err}", exc_info=True)
+        raise RuntimeError(f"Graphviz 'dot' command not found by build_visual.") from fnf_err
+    # Catching AttributeError which might occur if cfg object is malformed for build_visual
+    except AttributeError as attr_err:
+         logger.error(f"AttributeError during build_visual(), likely invalid CFG state: {attr_err}", exc_info=True)
+         raise RuntimeError(f"Failed visualization due to invalid CFG state: {attr_err}") from attr_err
+    except Exception as visual_err:
+        # Catch other potential errors during visualization
+        logger.error(f"Error during build_visual(): {visual_err}", exc_info=True)
+        raise RuntimeError(f"Error occurred during CFG visualization: {visual_err}") from visual_err
 
-    # Step 4: Check if pipe output is valid and write to file
-    if not img_output_bytes:
-        logger.error("Graphviz pipe() returned no output.")
-        raise RuntimeError("Graphviz 'dot' command ran but returned empty output.")
-
-    try:
-        with open(output_image_path, 'wb') as f:
-            f.write(img_output_bytes)
-        logger.info(f"Successfully wrote {len(img_output_bytes)} bytes to {output_image_path}")
-    except OSError as write_err:
-        logger.error(f"Failed to write pipe output to file {output_image_path}: {write_err}", exc_info=True)
-        raise RuntimeError(f"Failed to write CFG image to disk: {write_err}") from write_err
-
-    # Step 5: Final check on the written file
+    # Step 4: Check if the output file was actually created and is non-empty
+    # This remains the crucial check for success
     if not os.path.exists(output_image_path) or os.path.getsize(output_image_path) == 0:
-        logger.error(f"Output file check failed after write! Path: {output_image_path}")
-        raise RuntimeError(f"CFG visualization failed. Output file empty or missing after write.")
+        logger.error(f"build_visual() completed but output file is invalid: {output_image_path}")
+        # Check dot path again at point of failure for extra context
+        dot_runtime_path = shutil.which("dot")
+        if not dot_runtime_path:
+             logger.error("'dot' command not found via shutil.which() at runtime.")
+             raise RuntimeError("CFG visualization failed: Output invalid AND 'dot' command not found.")
+        else:
+             logger.warning(f"'dot' found at {dot_runtime_path}, but build_visual() produced invalid output.")
+             raise RuntimeError("CFG visualization failed: Output invalid ('dot' failed silently or CFG was empty?).")
 
     logger.info(f"Successfully generated CFG image: '{output_image_path}'")
+    # No explicit return needed here; success means the file was created.
 
 
 # --- Web Application Interface ---
@@ -152,7 +133,6 @@ def main():
         description="Generate a control flow graph (CFG) from a Python file.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    # ... (parser arguments remain the same) ...
     parser.add_argument(
         "input_file",
         help="Path to the input Python file (.py)."
@@ -176,7 +156,8 @@ def main():
     if output_dir_name == '':
         output_dir_name = '.'
 
-    if not os.path.exists(output_dir_name):
+    # Check existence *before* trying to create, avoid error if '.'
+    if output_dir_name != '.' and not os.path.exists(output_dir_name):
         try:
             os.makedirs(output_dir_name)
             logger.info(f"Created output directory: '{output_dir_name}'")
@@ -195,7 +176,7 @@ def main():
          print(f"Error: Input file not found - {fnf}")
          logger.error(f"CLI Error: {fnf}", exc_info=True)
          exit(1)
-    except ValueError as ve: # Catches invalid .py extension from core function if passed directly
+    except ValueError as ve: # Catches invalid .py extension
         print(f"Error: {ve}")
         logger.error(f"CLI Error: {ve}", exc_info=True)
         exit(1)
@@ -214,18 +195,11 @@ def main():
         exit(1)
 
 if __name__ == "__main__":
-    # Make sure py2cfg import happens here if needed, or handle potential NameError
+    # This try-except block ensures py2cfg is available when run as a script
     try:
-         # Import CFGBuilder here if it's only needed when run as script
-         # This avoids potential import errors if the file is just imported as a module
-         # Correction: It's needed in _generate_and_visualize_cfg, so import must be global or passed in.
-         # Let's keep the global import but make sure requirements are met.
-         from py2cfg import CFGBuilder
+         from py2cfg import CFGBuilder # Check import availability
          main()
     except ImportError:
-         print("Error: Missing 'py2cfg' library. Please install it (`pip install py2cfg`).")
-         exit(1)
-    except NameError as ne:
-         # Catch if CFGBuilder wasn't imported due to some issue.
-         print(f"Error: NameError encountered - {ne}. Is 'py2cfg' installed correctly?")
+         print("Error: Missing 'py2cfg' library. Please install it (`pip install py2cfg==0.7.3`).")
+         logging.error("ImportError for py2cfg. Ensure it's in requirements.txt and installed.")
          exit(1)
