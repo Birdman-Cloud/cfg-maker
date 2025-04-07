@@ -4,10 +4,7 @@ import os
 import tempfile
 from py2cfg import CFGBuilder
 
-# Initialize Flask app
 app = Flask(__name__)
-
-# Configure database (use Heroku's DATABASE_URL or fallback to SQLite for local testing)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
