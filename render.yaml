@@ -1,13 +1,9 @@
 services:
   - type: web
     name: cfg-generator
-    env: python
+    env: docker
     plan: free
-    buildCommand: |
-      apt-get update && apt-get install -y graphviz
-      ./build.sh
-      pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    dockerfilePath: Dockerfile
     envVars:
       - key: DATABASE_URL
         fromDatabase:
