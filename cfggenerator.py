@@ -1,8 +1,10 @@
+# --- At the top of cfggenerator.py ---
 import os
 import logging
 import tempfile
 from py2cfg import CFGBuilder
-from radon.complexity import cc_visit, SCORE
+# Import SCORE with an alias
+from radon.complexity import cc_visit, SCORE as RADON_SCORE 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -66,8 +68,8 @@ def calculate_cyclomatic_complexity(filepath):
                 # Determine rank based on complexity score
                 rank = 'A'  # Default Rank
                 try:
-                    if isinstance(SCORE, (list, tuple)):
-                        for score_entry in SCORE:
+                    if isinstance(RADON_SCORE, (list, tuple)):
+                        for score_entry in RADON_SCORE:
                             if isinstance(score_entry, (list, tuple)) and len(score_entry) >= 2:
                                 score_limit = score_entry[0]
                                 current_rank = score_entry[1]
@@ -77,7 +79,7 @@ def calculate_cyclomatic_complexity(filepath):
                             else:
                                 logging.warning(f"Unexpected item format in radon.complexity.SCORE: {score_entry}")
                     else:
-                        logging.warning(f"radon.complexity.SCORE is not a list or tuple: {type(SCORE)}")
+                        logging.warning(f"radon.complexity.SCORE is not a list or tuple: {type(RADON_SCORE)}")
                 except Exception as e_rank:
                     logging.error(f"Error calculating rank for complexity {block.complexity}: {e_rank}")
 
