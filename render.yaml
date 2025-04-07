@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: cfg-generator
+    env: python
+    plan: free
+    buildCommand: |
+      apt-get update && apt-get install -y graphviz
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cfg-db
+          property: connectionString
+
+databases:
+  - name: cfg-db
+    plan: free
