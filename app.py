@@ -4,6 +4,9 @@ import tempfile
 from py2cfg import CFGBuilder
 from flask_sqlalchemy import SQLAlchemy
 
+# Ensure Graphviz's dot is in PATH (Render typically installs it in /usr/bin or /usr/local/bin)
+os.environ["PATH"] += os.pathsep + "/usr/bin" + os.pathsep + "/usr/local/bin"
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
