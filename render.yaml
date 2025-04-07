@@ -3,7 +3,9 @@ services:
     name: cfg-generator
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      ./build.sh
+      pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: DATABASE_URL
