@@ -4,20 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analysis Results</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}"> </head>
 <body>
     <div class="container">
         <h1>Analysis Results for <span class="filename">{{ original_filename }}</span></h1>
 
         <div class="results-section">
             <h2>Control Flow Graph (CFG)</h2>
-            {% if image_file_url %}
-                <div class="cfg-image">
-                     <img src="{{ url_for('static', filename=image_file_url) }}" alt="Control Flow Graph">
+            {% if image_filename %} <div class="cfg-image">
+                     <img src="{{ url_for('serve_generated_image', filename=image_filename) }}" alt="Control Flow Graph">
                 </div>
             {% else %}
-                <p class="error">Could not generate CFG image.</p>
+                <p class="error">Could not generate or find CFG image.</p>
             {% endif %}
         </div>
 
