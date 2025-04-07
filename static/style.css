@@ -157,7 +157,7 @@ p {
 .error-box {
     padding: 15px 20px;
     margin-top: 20px;
-    border: 1px solid #f5c2c7;
+    border: 1px solid #f5c2c7; /* Use border color from flash error */
     background-color: #f8d7da;
     color: #842029;
     border-radius: 5px;

@@ -1,14 +1,20 @@
 services:
   - type: web
-    name: cfg-generator
-    env: docker
-    plan: free
+    name: cfg-generator # Service name
+    env: docker # Use Docker environment
+    plan: free # Render plan (check options)
     envVars:
-      - key: DATABASE_URL
+      - key: SECRET_KEY
+        generateValue: true # Automatically generate a secret key
+      - key: DATABASE_URL # Provided by Render database
         fromDatabase:
-          name: cfg-db
+          name: cfg-db # Match database name below
           property: connectionString
+      # Optionally set PYTHONUNBUFFERED=1 for better logging in Docker
+      - key: PYTHONUNBUFFERED
+        value: "1"
 
 databases:
-  - name: cfg-db
-    plan: free
+  - name: cfg-db # Database name
+    plan: free # Render database plan (check options)
+    # postgresql version can be specified if needed, check Render docs

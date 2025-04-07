@@ -8,27 +8,30 @@ RUN apt-get update && \
         graphviz \
         gcc \
         g++ \
-        libpq-dev && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+        libpq-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
 WORKDIR /app
 
-# Copy files
+# Copy all project files
 COPY . .
 
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# Install Python dependencies from the updated requirements file
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Set environment variable to ensure Graphviz's `dot` is in PATH
 ENV PATH="/usr/bin:/usr/local/bin:$PATH"
 
-# For debugging: print dot path
+# For debugging build: print paths
+RUN which python
+RUN which pip
 RUN which dot
-RUN which pg_config # Add this to verify libpq-dev installed correctly
+RUN which gunicorn
 
-# Expose port (Render typically uses 10000, but 8000 is fine if mapped)
+# Expose port (Gunicorn binds to 8000)
 EXPOSE 8000
 
-# Start the app
+# Start the app using Gunicorn
 CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000"]
