@@ -36,7 +36,7 @@ def generate_cfg_web(input_file, output_file, format='png'):
         return output_path
     except Exception as e:
         raise RuntimeError(f"Failed to generate CFG: {e}")
-
+    
 def main():
     """Parse command-line arguments and run the CFG generator."""
     parser = argparse.ArgumentParser(
