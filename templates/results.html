@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Analysis Results for <span class="filename">{{ original_filename }}</span></h1>
+
+        <div class="results-section">
+            <h2>Control Flow Graph (CFG)</h2>
+            {% if image_file_url %}
+                <div class="cfg-image">
+                     <img src="{{ url_for('static', filename=image_file_url) }}" alt="Control Flow Graph">
+                </div>
+            {% else %}
+                <p class="error">Could not generate CFG image.</p>
+            {% endif %}
+        </div>
+
+        <div class="results-section">
+            <h2>Cyclomatic Complexity</h2>
+            {% if complexity_results %}
+                <ul class="complexity-list">
+                    {% for result in complexity_results %}
+                        <li>{{ result }}</li>
+                    {% endfor %}
+                </ul>
+                <p><strong>Total Complexity Score: {{ total_complexity }}</strong></p>
+            {% else %}
+                 <p>Could not calculate complexity or no complex blocks found.</p>
+            {% endif %}
+        </div>
+
+        <div class="back-link">
+             <a href="{{ url_for('index') }}">Analyze another file</a>
+        </div>
+
+    </div>
+</body>
+</html>

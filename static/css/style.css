@@ -1,0 +1,132 @@
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+.container {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 25px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 5px;
+    margin-bottom: 20px;
+}
+
+code {
+    background-color: #eee;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.filename {
+    font-style: italic;
+    color: #555;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input[type="file"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    display: block; /* Ensures it takes full width potentially */
+    width: calc(100% - 20px); /* Adjust width */
+}
+
+button {
+    background-color: #3498db;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+.flash-messages {
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #f8d7da; /* Light red for errors */
+    border: 1px solid #f5c6cb;
+    color: #721c24; /* Dark red text */
+}
+
+.flash-error {
+    margin: 0;
+    padding: 5px 0;
+}
+
+.results-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.cfg-image img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+    display: block; /* Center image if container has text-align: center */
+    margin: 10px auto; /* Center block image */
+}
+
+.complexity-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.complexity-list li {
+    background-color: #ecf0f1;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.95em;
+    word-wrap: break-word; /* Wrap long function names */
+}
+
+.back-link {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.back-link a {
+    text-decoration: none;
+    color: #3498db;
+    font-weight: bold;
+}
+
+.back-link a:hover {
+    text-decoration: underline;
+}
+
+.error {
+    color: #e74c3c;
+    font-weight: bold;
+}

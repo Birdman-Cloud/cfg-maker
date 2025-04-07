@@ -1,20 +1,21 @@
 services:
-  - type: web
-    name: cfg-generator # Service name
-    env: docker # Use Docker environment
-    plan: free # Render plan (check options)
+  - type: web # Specifies a web service
+    name: python-cfg-analyzer # Name your service on Render
+    env: python # Specifies the environment
+    runtime: python3.11 # Match the version in runtime.txt
+    plan: free # Explicitly set the plan to free tier
+    buildCommand: | # Commands executed during build
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      apt-get update && apt-get install -y graphviz # Install Graphviz system package
+    startCommand: gunicorn app:app # Command to start the server
     envVars:
-      - key: SECRET_KEY
-        generateValue: true # Automatically generate a secret key
-      - key: DATABASE_URL # Provided by Render database
-        fromDatabase:
-          name: cfg-db # Match database name below
-          property: connectionString
-      # Optionally set PYTHONUNBUFFERED=1 for better logging in Docker
-      - key: PYTHONUNBUFFERED
-        value: "1"
+      - key: PYTHON_VERSION # Sets Python version explicitly if needed
+        value: 3.11.7
+      - key: FLASK_SECRET_KEY
+        generateValue: true # Let Render generate a secure secret key
+      - key: WEB_CONCURRENCY # Control gunicorn workers
+        value: 1 # Recommended value for free tier due to resource limits
 
-databases:
-  - name: cfg-db # Database name
-    plan: free # Render database plan (check options)
-    # postgresql version can be specified if needed, check Render docs
+# Note: Free tier instances spin down after a period of inactivity
+# and may take longer to respond to the first request after being idle.

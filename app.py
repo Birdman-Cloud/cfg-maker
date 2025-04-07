@@ -1,183 +1,165 @@
-from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash
 import os
-import tempfile
-from flask_sqlalchemy import SQLAlchemy
-import shutil
+import uuid
 import logging
-# Import the function from the overhauled generator
-from cfg_generator import generate_cfg_web
+import tempfile
+from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory
+from werkzeug.utils import secure_filename
+from cfggenerator import generate_cfg_image, calculate_cyclomatic_complexity
 
-# --- Basic Logging Setup ---
-# Using a more detailed format and app-specific logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
-app_logger = logging.getLogger('flask.app') # Use Flask's standard logger name
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Graphviz Path Check ---
-app_logger.info("🚀 Checking dot path at startup...")
-dot_path = shutil.which("dot")
-app_logger.info(f"System PATH: {os.environ.get('PATH')}")
-app_logger.info(f"shutil.which('dot') found: {dot_path}")
+# Configuration
+UPLOAD_FOLDER = tempfile.gettempdir() # Use system temp dir for uploads
+STATIC_FOLDER = os.path.join(os.path.dirname(__file__), 'static')
+GENERATED_IMAGES_FOLDER = os.path.join(STATIC_FOLDER, 'images')
+ALLOWED_EXTENSIONS = {'py'}
+MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1 MB limit
 
-# Ensure Graphviz's dot is in PATH
-if not dot_path and "/usr/bin" not in os.environ["PATH"]:
-    os.environ["PATH"] += os.pathsep + "/usr/bin"
-    app_logger.info("Added /usr/bin to PATH")
-if not dot_path and "/usr/local/bin" not in os.environ["PATH"]:
-     os.environ["PATH"] += os.pathsep + "/usr/local/bin"
-     app_logger.info("Added /usr/local/bin to PATH")
-
-dot_path_after = shutil.which("dot")
-app_logger.info(f"Dot path after potential PATH update: {dot_path_after}")
-if not dot_path_after:
-    app_logger.warning("Graphviz 'dot' command not found in PATH. CFG generation will likely fail.")
-
-# --- Flask App Setup ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev_secret_key_change_me')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 # 5MB limit
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'a_default_dev_secret_key') # Use env var in production
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
-db = SQLAlchemy(app)
+# Ensure the generated images directory exists
+os.makedirs(GENERATED_IMAGES_FOLDER, exist_ok=True)
 
-# --- Database Model (Commented Out) ---
-# class Upload(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     filename = db.Column(db.String(100), nullable=False)
-#     # cfg_path = db.Column(db.String(200), nullable=False)
+def allowed_file(filename):
+    """Checks if the file extension is allowed."""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# with app.app_context():
-#     # db.create_all()
-#     pass
+@app.route('/', methods=['GET'])
+def index():
+    """Renders the main upload page."""
+    return render_template('index.html')
 
-# --- Routes ---
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/upload', methods=['POST'])
 def upload_file():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            flash("No file part in the request.", "error")
-            return redirect(request.url)
+    """Handles file upload, generates CFG and complexity, shows results."""
+    if 'python_file' not in request.files:
+        flash('No file part in the request.')
+        return redirect(url_for('index'))
 
-        file = request.files['file']
+    file = request.files['python_file']
 
-        if file.filename == '':
-            flash("No selected file.", "error")
-            return redirect(request.url)
+    if file.filename == '':
+        flash('No selected file.')
+        return redirect(url_for('index'))
 
-        if not file.filename.endswith('.py'):
-            flash("Please upload a valid Python (.py) file.", "error")
-            return redirect(request.url)
-
-        input_temp_dir = None
-        output_temp_dir = None
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Use a temporary file to store the upload securely
+        # Suffix is important for py2cfg/radon if they check extensions
+        temp_suffix = f"_{filename}" if filename.endswith('.py') else '_upload.py'
+        temp_input_file = None
         try:
-            # Save uploaded file
-            input_temp_dir = tempfile.mkdtemp()
-            input_path = os.path.join(input_temp_dir, file.filename)
-            file.save(input_path)
-            app_logger.info(f"Uploaded file saved temporarily to: {input_path}")
+            with tempfile.NamedTemporaryFile(mode='w+b', delete=False, dir=UPLOAD_FOLDER, suffix=temp_suffix) as temp_input_file:
+                file.save(temp_input_file) # Save upload stream to temp file
+                temp_input_filepath = temp_input_file.name # Get the path
 
-            # Generate CFG using the imported function (now uses staticfg internally)
-            output_filename = 'cfg.png'
-            cfg_image_path = generate_cfg_web(input_path, output_filename, format='png')
+            logging.info(f"File '{filename}' uploaded temporarily to '{temp_input_filepath}'")
 
-            # Get temporary directory details for serving the result
-            output_temp_dir = os.path.dirname(cfg_image_path)
-            image_name = os.path.basename(cfg_image_path)
-            image_dir_basename = os.path.basename(output_temp_dir)
+            # Generate a unique name for the output image
+            unique_id = uuid.uuid4()
+            output_filename = f"cfg_{unique_id}.png"
+            # Note: output_image_path is the *full* path for saving
+            output_image_path = os.path.join(GENERATED_IMAGES_FOLDER, output_filename)
+            # image_url_path is relative to the 'static' folder for use in HTML
+            image_url_path = f"images/{output_filename}"
 
-            app_logger.info(f"CFG generated, redirecting to result for image {image_name} in dir {image_dir_basename}")
-            # Redirect to show result
-            return redirect(url_for('show_result', image_dir=image_dir_basename, image_name=image_name))
+            complexity_results = []
+            total_complexity = 0
+            generated_image_path = None
+            error_message = None
 
-        # --- Error Handling ---
-        except FileNotFoundError as fnf:
-             app_logger.error(f"File not found error during upload/processing: {fnf}", exc_info=True)
-             flash(f"Error: {fnf}", "error")
-             return redirect(request.url)
-        except ValueError as ve:
-             app_logger.error(f"Value error (e.g., invalid file type): {ve}", exc_info=True)
-             flash(f"Error: {ve}", "error")
-             return redirect(request.url)
-        except RuntimeError as re:
-            # Catch errors raised by generate_cfg_web (including from _generate_and_visualize_cfg)
-            app_logger.error(f"Runtime error during CFG generation: {re}", exc_info=True)
-            flash(f"Error generating CFG: {re}. Check server logs for details.", "error")
-            # Render the error page directly for critical generation errors
-            return render_template('error.html', error_message=f"Failed to generate CFG: {re}"), 500
+            try:
+                # 1. Calculate Cyclomatic Complexity
+                complexity_results, total_complexity = calculate_cyclomatic_complexity(temp_input_filepath)
+                logging.info(f"Complexity calculated: {len(complexity_results)} blocks, Total={total_complexity}")
+
+                # 2. Generate CFG Image
+                generated_image_path = generate_cfg_image(temp_input_filepath, output_image_path, fmt='png')
+                logging.info(f"CFG image generated: {generated_image_path}")
+
+            except SyntaxError as e:
+                error_message = f"Syntax Error: {e}"
+                flash(error_message)
+                logging.error(error_message)
+            except RuntimeError as e:
+                error_message = f"Error: {e}"
+                flash(error_message)
+                logging.error(error_message)
+            except Exception as e:
+                error_message = f"An unexpected error occurred: {e}"
+                flash(error_message)
+                logging.exception("Unexpected error during processing:") # Log stack trace
+
+            # Clean up the temporary input file
+            if temp_input_filepath and os.path.exists(temp_input_filepath):
+                 os.remove(temp_input_filepath)
+                 logging.info(f"Cleaned up temporary file: {temp_input_filepath}")
+
+
+            if generated_image_path and not error_message:
+                # Success - render results
+                return render_template('results.html',
+                                       image_file_url=image_url_path,
+                                       complexity_results=complexity_results,
+                                       total_complexity=total_complexity,
+                                       original_filename=filename)
+            else:
+                # Failure or partial failure - redirect back to index
+                # Flash message should already be set
+                 # Clean up potentially generated (but unused) image file on error
+                if output_image_path and os.path.exists(output_image_path) and not generated_image_path:
+                    try:
+                        os.remove(output_image_path)
+                        logging.info(f"Cleaned up unused image file: {output_image_path}")
+                    except OSError as rm_err:
+                        logging.error(f"Error removing unused image file {output_image_path}: {rm_err}")
+                return redirect(url_for('index'))
+
         except Exception as e:
-            # Catch any other unexpected errors
-            app_logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-            flash("An unexpected internal error occurred. Please try again.", "error")
-            return render_template('error.html', error_message="An unexpected internal server error occurred."), 500
-        finally:
-            # Clean up the temporary *input* directory
-            if input_temp_dir and os.path.exists(input_temp_dir):
-                try:
-                    shutil.rmtree(input_temp_dir)
-                    app_logger.info(f"Cleaned up input temp directory: {input_temp_dir}")
-                except Exception as cleanup_e:
-                    app_logger.error(f"Error cleaning up input temp directory '{input_temp_dir}': {cleanup_e}")
-            # Output dir cleanup happens within generate_cfg_web on error
+             # Catch errors related to temp file creation or saving
+             flash(f"Server error handling file upload: {e}")
+             logging.exception("Error during file upload handling:")
+             # Ensure cleanup even if temp file creation failed partially
+             if temp_input_file and hasattr(temp_input_file, 'name') and os.path.exists(temp_input_file.name):
+                 try:
+                     os.remove(temp_input_file.name)
+                 except OSError: pass # Ignore error during cleanup
+             return redirect(url_for('index'))
 
-    # GET request: just show the upload form
-    return render_template('upload.html')
+    else:
+        flash('Invalid file type. Please upload a .py file.')
+        return redirect(url_for('index'))
 
-@app.route('/result/<image_dir>/<image_name>')
-def show_result(image_dir, image_name):
-    """Displays the generated CFG image."""
-    app_logger.info(f"Showing result page for image {image_name} from dir {image_dir}")
-    return render_template('result.html', image_dir=image_dir, image_name=image_name)
+# Serve static files (Flask does this automatically in debug, but good practice)
+# This route is not strictly needed if using standard static folder config,
+# but can be useful for serving generated images if they were outside 'static'
+# @app.route('/generated/<filename>')
+# def generated_file(filename):
+#     return send_from_directory(GENERATED_IMAGES_FOLDER, filename)
 
-@app.route('/temp/<path:image_dir>/<path:filename>')
-def serve_temp_file(image_dir, filename):
-    """Serves generated CFG images from their specific temporary directory."""
-    directory = os.path.join(tempfile.gettempdir(), image_dir)
-    app_logger.info(f"Serving file '{filename}' from directory '{directory}'")
-    if not os.path.isdir(directory):
-        app_logger.error(f"Temporary directory not found: {directory}")
-        return "Image not found or expired (directory missing).", 404
-    if not os.path.isfile(os.path.join(directory, filename)):
-         app_logger.error(f"Image file not found in directory: {os.path.join(directory, filename)}")
-         return "Image not found or expired (file missing).", 404
-
-    # Add cache control headers to suggest browser re-validates
-    response = send_from_directory(directory, filename)
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
-
-
-@app.route('/health')
-def health_check():
-    return "OK", 200
-
-# --- Error Handlers ---
+# Error Handling
 @app.errorhandler(404)
-def page_not_found(e):
-    app_logger.warning(f"404 Not Found for URL: {request.url}")
-    return render_template('error.html', error_message=f"Page Not Found (404): {request.path}"), 404
+def not_found_error(error):
+    return render_template('404.html'), 404 # You'll need to create templates/404.html
 
 @app.errorhandler(500)
-def internal_server_error(e):
-    # Log the original exception if it's available
-    original_exception = getattr(e, 'original_exception', None)
-    app_logger.error(f"500 Internal Server Error: {e}", exc_info=original_exception or True)
-    # Display a generic message to the user but pass the specific error from generate_cfg_web if it caused this
-    error_msg = "Internal Server Error (500). Please contact support if the issue persists."
-    if isinstance(original_exception, RuntimeError) and "Failed to generate CFG" in str(original_exception):
-         error_msg = str(original_exception) # Show the specific CFG generation error
-    return render_template('error.html', error_message=error_msg), 500
+def internal_error(error):
+    # Log the error details here if needed
+    flash("An internal server error occurred. Please try again later.")
+    return redirect(url_for('index')) # Redirect to index on 500
 
 @app.errorhandler(413)
-def request_entity_too_large(e):
-    app_logger.warning(f"File upload rejected (too large): {e}")
-    flash(f"File is too large. Maximum size is {app.config['MAX_CONTENT_LENGTH'] // 1024 // 1024}MB.", "error")
-    return redirect(url_for('upload_file'))
+def request_entity_too_large(error):
+    flash(f"File is too large. Maximum size is {MAX_CONTENT_LENGTH / 1024 / 1024:.1f} MB.")
+    return redirect(url_for('index'))
 
-# --- Main Guard ---
 if __name__ == '__main__':
-    # Use environment variable for debug mode, default to False
-    is_debug = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
-    app.run(debug=is_debug, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    # Set a more specific host and port for local dev if needed
+    # Use '0.0.0.0' to be accessible on the network
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False)
+    # Note: When deploying with gunicorn, this __main__ block is NOT executed.
+    # Gunicorn runs the 'app' object directly. debug=False is crucial for production.
