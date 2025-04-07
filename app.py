@@ -3,6 +3,10 @@ import os
 import tempfile
 from py2cfg import CFGBuilder
 from flask_sqlalchemy import SQLAlchemy
+import shutil, os
+print("🚀 Checking dot path at startup...")
+print("PATH =", os.environ.get("PATH"))
+print("dot found at:", shutil.which("dot"))
 
 # Ensure Graphviz's dot is in PATH (Render typically installs it in /usr/bin or /usr/local/bin)
 os.environ["PATH"] += os.pathsep + "/usr/bin" + os.pathsep + "/usr/local/bin"
