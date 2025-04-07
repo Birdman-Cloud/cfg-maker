@@ -3,7 +3,6 @@ services:
     name: cfg-generator
     env: docker
     plan: free
-    dockerfilePath: Dockerfile
     envVars:
       - key: DATABASE_URL
         fromDatabase:
