@@ -10,7 +10,7 @@ RUN apt-get update && \
         g++ \
         libpq-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-    
+
 # Set work directory
 WORKDIR /app
 
@@ -18,7 +18,6 @@ WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-# (Consider updating psycopg2-binary version as well, though libpq-dev is the main fix)
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Set environment variable to ensure Graphviz's `dot` is in PATH
