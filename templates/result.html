@@ -3,10 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>CFG Result</title>
-</head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> </head>
 <body>
     <h1>Control Flow Graph</h1>
-    <img src="{{ url_for('serve_temp_file', filename=image_file) }}" alt="CFG" style="max-width: 100%;">
+
+    {% if image_dir and image_name %}
+    <img src="{{ url_for('serve_temp_file', image_dir=image_dir, filename=image_name) }}" alt="Generated CFG" style="max-width: 100%; border: 1px solid #ccc;">
+    {% else %}
+    <p style="color: red;">Error: Image information missing.</p>
+    {% endif %}
+
     <p><a href="{{ url_for('upload_file') }}">Upload another file</a></p>
+
 </body>
 </html>
