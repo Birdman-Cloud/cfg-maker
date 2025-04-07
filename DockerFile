@@ -1,23 +1,29 @@
-# Use an official Python base image
+# Dockerfile
+
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install dependencies including Graphviz
 RUN apt-get update && \
-    apt-get install -y graphviz && \
-    apt-get clean
+    apt-get install -y graphviz gcc g++ && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Set work directory
 WORKDIR /app
 
-# Copy project files
+# Copy files
 COPY . .
 
 # Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Expose port (optional, Render handles this)
+# Set environment variable to ensure Graphviz's `dot` is in PATH
+ENV PATH="/usr/bin:/usr/local/bin:$PATH"
+
+# For debugging: print dot path
+RUN which dot
+
+# Expose port
 EXPOSE 8000
 
-# Start app using Gunicorn
+# Start the app
 CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000"]
