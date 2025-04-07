@@ -7,6 +7,7 @@ from radon.complexity import cc_visit, SCORE
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+
 def annotate_execution_order(cfg):
     """
     Annotate the CFG with execution order numbers on nodes (BFS).
@@ -26,21 +27,19 @@ def annotate_execution_order(cfg):
         visited.add(node)
 
         try:
-            # Update node label with order prefix if possible
             current_label = getattr(node, 'label', '')
             node.label = f"{order}. {current_label}"
         except AttributeError:
-            # Some nodes might not have a label or it might not be writable
             logging.warning("Could not set label for a node. Skipping annotation for this node.")
-            pass # Continue processing other nodes
+            pass
 
         order += 1
 
-        # Enqueue successors if available
         successors = getattr(node, 'successors', [])
         for succ in successors:
             if succ not in visited:
                 queue.append(succ)
+
 
 def calculate_cyclomatic_complexity(filepath):
     """
@@ -65,13 +64,29 @@ def calculate_cyclomatic_complexity(filepath):
         else:
             for block in blocks:
                 # Determine rank based on complexity score
-                rank = SCORE[0][1] # Default to 'A'
-                for score_limit, current_rank in SCORE:
-                    if block.complexity <= score_limit:
-                        rank = current_rank
-                        break
-                results.append(f"- {block.classname or ''}{block.name} ({block.lineno}-{block.endline}): Complexity {block.complexity} ({rank})")
+                rank = 'A'  # Default Rank
+                try:
+                    if isinstance(SCORE, (list, tuple)):
+                        for score_entry in SCORE:
+                            if isinstance(score_entry, (list, tuple)) and len(score_entry) >= 2:
+                                score_limit = score_entry[0]
+                                current_rank = score_entry[1]
+                                if block.complexity <= score_limit:
+                                    rank = current_rank
+                                    break
+                            else:
+                                logging.warning(f"Unexpected item format in radon.complexity.SCORE: {score_entry}")
+                    else:
+                        logging.warning(f"radon.complexity.SCORE is not a list or tuple: {type(SCORE)}")
+                except Exception as e_rank:
+                    logging.error(f"Error calculating rank for complexity {block.complexity}: {e_rank}")
+
+                results.append(
+                    f"- {block.classname or ''}{block.name} ({block.lineno}-{block.endline}): "
+                    f"Complexity {block.complexity} ({rank})"
+                )
                 total_complexity += block.complexity
+
         return results, total_complexity
 
     except ImportError:
@@ -83,6 +98,7 @@ def calculate_cyclomatic_complexity(filepath):
     except Exception as e:
         logging.error(f"Error during complexity analysis: {e}")
         return [f"Error during complexity analysis: {e}"], 0
+
 
 def generate_cfg_image(input_filepath, output_image_path, fmt='png'):
     """
@@ -99,51 +115,41 @@ def generate_cfg_image(input_filepath, output_image_path, fmt='png'):
         Exception: For unexpected errors.
     """
     try:
-        # Create output directory if it doesn't exist
         output_dir = os.path.dirname(output_image_path)
         os.makedirs(output_dir, exist_ok=True)
 
-        # Build CFG
         cfg = CFGBuilder().build_from_file('cfg_analysis', input_filepath)
 
         if not cfg or not hasattr(cfg, 'entry') or cfg.entry is None:
-             # Check if the file is empty or has no executable code
             with open(input_filepath, 'r', encoding='utf-8') as f:
                 if not f.read().strip():
                     raise RuntimeError("Input file is empty.")
-            # It might be valid Python but with no executable code at top level
-            logging.warning(f"CFG generated for '{input_filepath}' is empty or has no entry point. Rendering might be minimal or fail.")
-            # Attempt to render anyway, it might show disconnected components or nothing
-            # If build_visual fails below, the except block will catch it.
 
-        # Annotate nodes (best effort)
+            logging.warning(f"CFG generated for '{input_filepath}' is empty or has no entry point. "
+                            "Rendering might be minimal or fail.")
+
         try:
             annotate_execution_order(cfg)
         except Exception as annotate_e:
             logging.warning(f"Could not fully annotate CFG: {annotate_e}")
 
-        # Visualize and save
         logging.info(f"Attempting to build visual CFG at: {output_image_path}")
-        cfg.build_visual(output_image_path, format=fmt, show=False) # show=False for server environment
+        cfg.build_visual(output_image_path, format=fmt, show=False)
         logging.info(f"CFG image generated successfully: {output_image_path}")
         return output_image_path
 
     except FileNotFoundError:
-        # This shouldn't happen if input_filepath comes from a temp file
         logging.error(f"Input file not found: {input_filepath}")
         raise RuntimeError(f"Internal Server Error: Could not find temporary file.")
     except SyntaxError as e:
         logging.error(f"Syntax error in input file '{input_filepath}': {e}")
         raise SyntaxError(f"Syntax error in uploaded file: {e}")
     except ImportError as e:
-        # Catch potential graphviz import errors if not installed correctly
-         logging.error(f"Import Error during CFG generation (likely graphviz): {e}")
-         raise RuntimeError("Server configuration error: Graphviz might be missing or not configured correctly.")
+        logging.error(f"Import Error during CFG generation (likely graphviz): {e}")
+        raise RuntimeError("Server configuration error: Graphviz might be missing or not configured correctly.")
     except Exception as e:
-        # Catch errors from build_visual (e.g., graphviz not found, permission issues)
         logging.error(f"Failed to generate or visualize CFG for '{input_filepath}': {e}")
-        # Check if graphviz executable is the likely cause
         if "failed to execute" in str(e).lower() or "command not found" in str(e).lower():
-             raise RuntimeError("Server configuration error: Graphviz executable not found. Please ensure it's installed.")
+            raise RuntimeError("Server configuration error: Graphviz executable not found. Please ensure it's installed.")
         else:
-             raise RuntimeError(f"Failed to generate CFG image: {e}")
+            raise RuntimeError(f"Failed to generate CFG image: {e}")
