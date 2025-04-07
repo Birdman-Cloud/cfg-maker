@@ -40,10 +40,10 @@ def generate_cfg_web(input_file_path, output_filename, format='png'):
     # Generate and visualize the CFG
     try:
         cfg = CFGBuilder().build_from_file(output_filename.split('.')[0], input_file_path)
-        if not cfg or not cfg._blocks:  # Check if the CFG has blocks (i.e., meaningful code)
-            logging.warning(f"Generated CFG for '{os.path.basename(input_file_path)}' is empty or invalid.")
-            raise RuntimeError("Generated CFG is empty or invalid. Input file might lack executable code.")
-
+        # Corrected check:
+        if not cfg or not cfg.graph: # Check if the CFG object or its graph attribute is invalid
+            logging.warning(f"Generated CFG object or its graph attribute is invalid for '{os.path.basename(input_file_path)}'. Input might be empty or unparsable.")
+            raise RuntimeError("Generated CFG is empty or invalid. Input file might lack executable code or be unparsable.")
 
         logging.info(f"CFG object created. Attempting to build visual: {output_path} (format: {format})")
         # The build_visual method requires the 'dot' command from Graphviz
